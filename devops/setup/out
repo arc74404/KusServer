@@ -1,0 +1,15 @@
+
+D:\projects\server_setup\KusServer - Copy\devops\setup>cd ../maintain/scripts 
+
+D:\projects\server_setup\KusServer - Copy\devops\maintain\scripts>call autopush.bat 
+
+D:\projects\server_setup\KusServer - Copy\devops\maintain\scripts>cd ../../.. 
+
+D:\projects\server_setup\KusServer - Copy>git branch -D autocommit 
+Deleted branch autocommit (was 83b018c).
+
+D:\projects\server_setup\KusServer - Copy>git branch autocommit 
+
+D:\projects\server_setup\KusServer - Copy>git stash --include-untracked 
+warning: in the working copy of 'devops/setup/out', LF will be replaced by CRLF the next time Git touches it
+Saved working directory and index state WIP on 2024_competition: 20b7927 working
