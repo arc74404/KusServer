@@ -1,6 +1,18 @@
 #include "registry.hpp"
 
+#include "utility/file_system/path_storage.hpp"
+
 SINGLETON_DEFINITOR(core, ModuleRegistry);
+
+core::ModuleRegistry::ModuleRegistry() noexcept
+{
+    mainSetup();
+}
+
+void
+core::ModuleRegistry::mainSetup() noexcept
+{
+}
 
 void
 core::ModuleRegistry::addModuleNonstatic(Module* a_module_ptr) noexcept
@@ -11,7 +23,7 @@ core::ModuleRegistry::addModuleNonstatic(Module* a_module_ptr) noexcept
 bool
 core::ModuleRegistry::isRunningNonstatic() noexcept
 {
-    // TODO: life-cycle
+    // TODO: implement the real life cycle of the application
     return true;
 }
 
