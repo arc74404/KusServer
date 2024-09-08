@@ -20,11 +20,11 @@ util::PathStorage::PathStorage() noexcept
 {
     // Set path to bin and its parant folders
     auto exe_path = std::filesystem::current_path();
-    SCOPED_CONTEXT(addFileNonstatic, "exe", exe_path.string());
+    SCOPED_CONTEXT(addFileNonstatic, EXE_PATH_NAME, exe_path.string());
 
     auto app_folder_path     = exe_path.parent_path().parent_path();
     auto app_folder_path_str = exe_path.parent_path().parent_path().string();
-    SCOPED_CONTEXT(addFolderNonstatic, "app", app_folder_path_str);
+    SCOPED_CONTEXT(addFolderNonstatic, APP_PATH_NAME, app_folder_path_str);
 
     addContentToPaths(app_folder_path_str, ObjectType::FOLDER,
                       LevelType::CURRENT);

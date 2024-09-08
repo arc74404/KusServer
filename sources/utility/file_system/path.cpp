@@ -1,5 +1,7 @@
 #include "path.hpp"
 
+#include "path_storage.hpp"
+
 std::string
 util::Path::getName(std::string_view a_path,
                     const core::Context& a_context) noexcept
@@ -39,5 +41,15 @@ util::Path::normalizeFolderPath(std::string_view a_path) noexcept
     {
         result.push_back(PATH_SEPARATOR);
     }
+    return result;
+}
+
+std::string
+util::Path::getRelativeToApp(std::string_view a_path) noexcept
+{
+    std::string result;
+    DECLARE_LOCAL_CONTEXT;
+    auto app_path = PathStorage::getFolderPath(APP_PATH_NAME, &context_local);
+    result        = combine(app_path.value(), a_path);
     return result;
 }

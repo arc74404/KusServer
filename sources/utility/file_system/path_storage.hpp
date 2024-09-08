@@ -16,9 +16,12 @@
 #include "path.hpp"
 
 //------------------------------------------------------------------------------
-
 namespace util
 {
+
+constexpr const char* EXE_PATH_NAME = "exe";
+constexpr const char* APP_PATH_NAME = "app";
+
 class PathStorage
 {
 public:

@@ -32,6 +32,8 @@ public:
 
     static std::string normalizeFolderPath(std::string_view a_path) noexcept;
 
+    static std::string getRelativeToApp(std::string_view a_path) noexcept;
+
 private:
     template <typename... Args>
     static std::string combineImpl(Args... args) noexcept
