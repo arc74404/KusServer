@@ -1,12 +1,22 @@
 #include "state_storage.hpp"
 
+#include "utility/file_system/path.hpp"
 #include "utility/file_system/path_storage.hpp"
+
+constexpr const char* DATA_FOLDER_NAME  = "data";
+constexpr const char* COMMAND_FILE_NAME = "exe";
 
 SINGLETON_DEFINITOR(core, StateStorage);
 
 core::StateStorage::StateStorage() noexcept
 {
-util::PathStorage::getFolderPath
+    auto data_path = util::PathStorage::touchFolder(
+        util::Path::getRelativeToApp(DATA_FOLDER_NAME));
+    auto comm_file =
+        util::PathStorage::getFilePath(DATA_FOLDER_NAME, COMMAND_FILE_NAME);
+    if (comm_file.has_value())
+    {
+    }
 }
 
 void
@@ -51,6 +61,12 @@ bool
 core::StateStorage::VarsComparator::operator()(
     const CommandExtend& first,
     const CommandExtend& second) const noexcept
+{
+    return commandCompare(first, second, first.variables, second.variables);
+}
+
+void
+core::StateStorage::applyFile(const std::string& a_path_name) const noexcept
 {
     return commandCompare(first, second, first.variables, second.variables);
 }

@@ -49,6 +49,7 @@ private:
     std::vector<CommandExtend> m_unique_commands;
 
     StateStorage() noexcept;
+    void applyFile(const std::string& a_path_name) noexcept;
 
     template <typename T1, typename T2>
     static bool commandCompare(const CommandExtend& first,
