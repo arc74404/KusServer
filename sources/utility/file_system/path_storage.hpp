@@ -66,18 +66,17 @@ public:
                      (std::string_view a_file_name,
                       const core::Context* a_context = nullptr));
 
-    SINGL_RET_METHOD(std::optional<std::string>,
-                     getFilePath,
-                     (std::string_view a_folder_name,
-                      std::string_view a_file_name,
-                      const core::Context* a_context = nullptr));
-
     SINGL_RET_METHOD(std::optional<std::string_view>,
                      getFolderPath,
                      (std::string_view a_folder_name,
                       const core::Context* a_context = nullptr));
 
 private:
+    static std::optional<std::string> getFilePathNonstatic(
+        std::string_view a_folder_name,
+        std::string_view a_file_name,
+        const core::Context* a_context = nullptr);
+
     std::optional<std::string_view> searchInStorage(
         std::unordered_map<std::string_view, std::string>& a_storage,
         const std::string_view& a_key,

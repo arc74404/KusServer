@@ -1,7 +1,9 @@
 #include "state_storage.hpp"
 
+#include "utility/file_system/file.hpp"
 #include "utility/file_system/path.hpp"
 #include "utility/file_system/path_storage.hpp"
+#include "utility/string/parser.hpp"
 
 constexpr const char* DATA_FOLDER_NAME  = "data";
 constexpr const char* COMMAND_FILE_NAME = "exe";
@@ -12,11 +14,13 @@ core::StateStorage::StateStorage() noexcept
 {
     auto data_path = util::PathStorage::touchFolder(
         util::Path::getRelativeToApp(DATA_FOLDER_NAME));
-    auto comm_file =
-        util::PathStorage::getFilePath(DATA_FOLDER_NAME, COMMAND_FILE_NAME);
-    if (comm_file.has_value())
-    {
-    }
+    // auto comm_file =
+    //     util::PathStorage::getFilePath(DATA_FOLDER_NAME, COMMAND_FILE_NAME);
+    // if (comm_file.has_value())
+    // {
+    //     auto comm_data  = util::File::read(comm_file.value());
+    //     auto comm_array = util::Parser::getLines(comm_data);
+    // }
 }
 
 void
