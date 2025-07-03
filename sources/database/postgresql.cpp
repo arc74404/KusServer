@@ -1,370 +1,152 @@
 #include "postgresql.hpp"
 
-#include <codecvt>
-#include <locale>
+#include <cstring>
 
-#include "domain/cyrillic.hpp"
+#include "core/logging/logging.hpp"
+
+#include "string/string_malloc.hpp"
 
 #include "pqxx/nontransaction"
 
-#include "sql_wrapper.hpp"
+#define LOG_POSTGRES_QUERIES 1
 
-#ifdef BILL_WINDOWS
-#    define LOG_POSTGRES_QUERIES 1
-#else
-#    define LOG_POSTGRES_QUERIES 1
-#endif
-
-//--------------------------------------------------------------------------------
-
-data::ColumnSetting::ColumnSetting(std::string aName,
-                                   std::string aType,
-                                   std::string aInfo) noexcept
-    : name(aName), type(aType), info(aInfo)
+data::PostgreSQL::PostgreSQL(const Credentials& a_cred)
 {
-}
+    MALLOC_STR(statement, 200);
+    auto cur_char_ptr = statement;
 
-data::Postgresql::Postgresql(const DBSettings& aDBS)
-{
-    dom::writeInfo("Creating_postgresql_database_connection");
+    SPRINTF(cur_char_ptr,
+            // "dbname = %s user = %s password = %s hpsaddr = %s port = %s",
+            // cred.name, cred.user, cred.password, cred.hostaddr, cred.port);
+            "user = %s password = %s host = %s port = %s dbname = %s ",
+            a_cred.user, a_cred.password, a_cred.hostaddr, a_cred.port,
+            a_cred.name);
+
+    //--------------------------------------------------------------------------------
+
+    LOG_INFO("Creating PostgreSQL connection with stament '%s'", statement);
     try
     {
-        // clang-format off
-        mConnection = std::make_unique<pqxx::connection>(
-            "dbname = "s     +   aDBS.name       + " "s +
-            "user = "s       +   aDBS.user           + " "s +
-            "password = "s   +   aDBS.password   + " "s +  
-            "hostaddr = 127.0.0.1 port = 5432"s
-        );
-        // clang-format on
+        m_pqxx_connection_ptr = std::make_unique<pqxx::connection>(statement);
     }
     catch (const std::exception& e)
     {
-        dom::writeError("Postgresql::Postgresql() ", e.what());
-        // exit(0);
+        LOG_ERROR("Can't connect to database: ", e.what());
+        static_assert("Can't connect to database");
     }
 
-    dom::writeInfo("Opening_postgresql_database");
-    if (mConnection->is_open())
+    if (m_pqxx_connection_ptr->is_open())
     {
-        dom::writeInfo("Opened_database_successfully");
+        LOG_INFO("PostgreSQL connection ready for use");
     }
     else
     {
-        dom::writeInfo("Can't_open_database");
-        // exit(0);
+        LOG_ERROR("Can't_open_database");
+        static_assert("Database failed");
     }
-}
-
-//--------------------------------------------------------------------------------
-
-void
-data::Postgresql::select(const std::string& aTableName,
-                         const std::string& aColum,
-                         const std::string& aCondition) noexcept
-{
-    std::string statement = "SELECT "s + (aColum == ""s ? "*"s : aColum) +
-                            " FROM "s + aTableName +
-                            (aCondition == ""s ? ""s : " WHERE "s) + aCondition;
-
-    prepare(statement);
-}
-
-void
-data::Postgresql::directSelect(const std::string& aRequest) noexcept
-{
-    prepare(aRequest);
-}
-
-std::string
-data::Postgresql::getCell(const std::string& aTableName,
-                          const std::string& aColumnName,
-                          const std::string& aCondition) noexcept
-{
-    std::string statement = "SELECT "s + aColumnName + " FROM "s + aTableName +
-                            " WHERE "s + aCondition;
-
-    prepare(statement);
-    step();
-    std::string result = getRaw(0);
-    // std::string result = getColumnAsStringUnsafe(0);
-    closeStatment();
-    return result;
-}
-
-void
-data::Postgresql::closeStatment() noexcept
-{
-    if (mStatement != nullptr)
-    {
-        mStatement->commit();
-        mStatement = nullptr;
-    }
-}
-
-//--------------------------------------------------------------------------------
-
-std::vector<int>
-data::Postgresql::insert(const std::string& aTableName,
-                         const std::string& aData) noexcept
-{
-    std::string statement =
-        "INSERT INTO " + aTableName + " VALUES " + aData + " RETURNING id;";
-
-    prepare(statement);
-
-    std::vector<int> res;
-    step();
-    while (hasData(0))
-    {
-        res.emplace_back(getColumnIntUnsafe(0));
-        step();
-    }
-    closeStatment();
-
-    return res;
-}
-
-void
-data::Postgresql::update(const std::string& aTableName,
-                         const std::string& aData,
-                         const std::string& aCondition) noexcept
-{
-    std::string statement =
-        "UPDATE " + aTableName + " SET " + aData + " WHERE " + aCondition;
-    exec(statement);
-}
-
-void
-data::Postgresql::drop(const std::string& aTableName,
-                       const std::string& aCondition) noexcept
-{
-    std::string statement =
-        "DELETE FROM " + aTableName + " WHERE " + aCondition;
-    exec(statement);
-}
-
-//--------------------------------------------------------------------------------
-
-void
-data::Postgresql::createEnvironment(const data::DBSettings& aDBS) noexcept
-{
-    auto& aDBName    = aDBS.name;
-    auto& aUserName  = aDBS.user;
-    auto& aPassword  = aDBS.password;
-    auto& aShameName = aDBS.shame;
-
-    std::string statement = "CREATE DATABASE " + aDBS.name + " ";
-    statement += " WITH ENCODING \'ISO_8859_5\' ";
-    statement += "LC_COLLATE=\'C\' LC_CTYPE=\'C\' ";
-    statement += "TEMPLATE=template0";
-    statement += ";";
-    nontransaction(statement);
-
-    exec("CREATE USER " + aDBS.user + " WITH PASSWORD \'" + aPassword + "\'");
-    exec("ALTER ROLE " + aDBS.user + " SET client_encoding TO \'ISO_8859_5\'");
-    exec("ALTER ROLE " + aUserName + " SET timezone TO 'UTC+3'");
-    exec("GRANT ALL PRIVILEGES ON DATABASE " + aDBName + " TO " + aUserName);
-
-    std::unique_ptr<pqxx::connection> temp = std::move(mConnection);
-    // clang-format off
-    mConnection = std::make_unique<pqxx::connection>(
-        "dbname     = " +   aDBName         + " " +
-        "user       = " +   aUserName       + " " +
-        "password   = " +   aPassword       + " " +  
-        "hostaddr   =       127.0.0.1       \
-        port        =       5432"
-    );
-    // clang-format on
-
-    exec("CREATE SCHEMA " + aShameName);
-    exec("GRANT USAGE ON SCHEMA " + aShameName + " TO " + aUserName);
-    exec("GRANT CREATE ON SCHEMA " + aShameName + " TO " + aUserName);
-    exec("GRANT CONNECT ON DATABASE " + aDBName + " TO " + aUserName);
-
-    mConnection = std::move(temp);
-}
-
-void
-data::Postgresql::createTable(const std::string& aTableName,
-                              const std::vector<ColumnSetting>& aColumns,
-                              const std::string& aUserName) noexcept
-{
-    std::string statement = "CREATE TABLE " + aTableName + " ( ";
-
-    statement += "id integer PRIMARY KEY,";
-    for (auto& i : aColumns)
-    {
-        statement += i.name + " ";
-        statement += i.type + " ";
-        statement += i.info + " ";
-        statement += ",";
-    }
-    statement.back() = ')';
-
-    exec(statement);
-    exec("ALTER TABLE " + aTableName + " OWNER TO " + aUserName);
-
-    createSequence(aTableName, aUserName);
-}
-
-void
-data::Postgresql::deleteDatabase(const std::string& aDBName) noexcept
-{
-    std::string statement = "DROP DATABASE " + aDBName;
-    statement += ";";
-    nontransaction(statement);
-}
-
-//--------------------------------------------------------------------------------
-
-std::optional<int>
-data::Postgresql::getColumnInt(int aColumNumber) noexcept
-{
-    return mResultIterator[aColumNumber].as<std::optional<int>>();
-}
-
-std::optional<bool>
-data::Postgresql::getColumnBool(int aColumNumber) noexcept
-{
-    return mResultIterator[aColumNumber].as<std::optional<bool>>();
-}
-
-std::optional<const char*>
-data::Postgresql::getColumnAsChars(int aColumNumber) noexcept
-{
-    return mResultIterator[aColumNumber].as<std::optional<const char*>>();
-}
-
-std::optional<std::string>
-data::Postgresql::getColumnAsString(int aColumNumber) noexcept
-{
-    return mResultIterator[aColumNumber].as<std::optional<std::string>>();
 }
 
 //--------------------------------------------------------------------------------
 
 int
-data::Postgresql::getColumnIntUnsafe(int aColumNumber) noexcept
+data::PostgreSQL::getInt(int a_colum_number) noexcept
 {
-    return mResultIterator[aColumNumber].as<int>();
+    return m_pqxx_result_it[a_colum_number].as<int>();
 }
 
 float
-data::Postgresql::getColumnFloatUnsafe(int aColumNumber) noexcept
+data::PostgreSQL::getFloat(int a_colum_number) noexcept
 {
-    return mResultIterator[aColumNumber].as<float>();
+    return m_pqxx_result_it[a_colum_number].as<float>();
 }
 
 bool
-data::Postgresql::getColumnBoolUnsafe(int aColumNumber) noexcept
+data::PostgreSQL::getBool(int a_colum_number) noexcept
 {
-    return mResultIterator[aColumNumber].as<bool>();
+    return m_pqxx_result_it[a_colum_number].as<bool>();
 }
 
 const char*
-data::Postgresql::getColumnAsCharsUnsafe(int aColumNumber) noexcept
+data::PostgreSQL::getChars(int a_colum_number) noexcept
 {
-    return mResultIterator[aColumNumber].as<const char*>();
-}
-
-std::string
-data::Postgresql::getColumnAsStringUnsafe(int aColumNumber) noexcept
-{
-    return mResultIterator[aColumNumber].as<std::string>();
-}
-
-std::string
-data::Postgresql::getRaw(int aColumNumber) noexcept
-{
-    return std::string(mResultIterator[aColumNumber].c_str());
+    return m_pqxx_result_it[a_colum_number].as<const char*>();
 }
 
 //--------------------------------------------------------------------------------
 
 void
-data::Postgresql::step() noexcept
+data::PostgreSQL::step() noexcept
 {
-    mResultIterator++;
-}
-
-bool
-data::Postgresql::hasData(int num) const noexcept
-{
-    return !mResultIterator[num].is_null();
+    m_pqxx_result_it++;
 }
 
 void
-data::Postgresql::prepare(const std::string& aStatment) noexcept
+data::PostgreSQL::exec(const char* a_statment) noexcept
 {
 #if LOG_POSTGRES_QUERIES
-    dom::writeInfo(aStatment);
+    LOG_INFO("%s", a_statment);
 #endif
 
-    closeStatment();
+    closeStatement();
     try
     {
-        mStatement      = std::make_unique<pqxx::work>(*mConnection);
-        mResult         = pqxx::result(mStatement->exec(aStatment.c_str()));
-        mResultIterator = --mResult.begin();
+        // TODO: check
+        m_pqxx_statement_ptr =
+            std::make_unique<pqxx::work>(*m_pqxx_connection_ptr);
+        m_pqxx_result    = pqxx::result(m_pqxx_statement_ptr->exec(a_statment));
+        m_pqxx_result_it = --m_pqxx_result.begin();
     }
     catch (const pqxx::sql_error& e)
     {
-        std::string s(e.what());
-        // auto str = dom::Cyrilic::global.translit(s);
-        dom::writeError(s, "req:", aStatment);
+        // TODO: cyrilic
+        LOG_ERROR("Exception in pqxxlib: '%s'. Request: '%s'.", e.what(),
+                  a_statment);
     }
 }
 
 void
-data::Postgresql::exec(const std::string& aStatements) noexcept
+data::PostgreSQL::closeStatement() noexcept
 {
-    prepare(aStatements);
-    // step();
-    closeStatment();
+    if (m_pqxx_statement_ptr != nullptr)
+    {
+        m_pqxx_statement_ptr->commit();
+        m_pqxx_statement_ptr = nullptr;
+    }
 }
 
 void
-data::Postgresql::nontransaction(const std::string& aStatment) noexcept
+data::PostgreSQL::nontransaction(const char* a_statment) noexcept
 {
 #if LOG_POSTGRES_QUERIES
-    dom::writeInfo(aStatment);
+    LOG_INFO("%s", a_statment);
 #endif
 
     try
     {
-        pqxx::nontransaction w(*mConnection);
-        w.exec(aStatment);
+        pqxx::nontransaction w(*m_pqxx_connection_ptr);
+        w.exec(a_statment);
         w.commit();
     }
     catch (const pqxx::sql_error& e)
     {
-        std::string s(e.what());
-        // auto str = dom::Cyrilic::global.translit(s);
-        dom::writeError(s, "req:", aStatment);
+        // TODO: cyrilic
+        LOG_ERROR("Exception in pqxxlib: '%s'. Request: '%s'.", e.what(),
+                  a_statment);
     }
 }
 
 //--------------------------------------------------------------------------------
 
-void
-data::Postgresql::createSequence(const std::string& aTableName,
-                                 const std::string& aUserName) noexcept
+word_t
+data::PostgreSQL::hasData(int num) const noexcept
 {
-    std::string sequenceName = aTableName + "_id_seq";
+    return !m_pqxx_result_it[num].is_null();
+}
 
-    exec("CREATE SEQUENCE " + sequenceName +
-         " AS integer "
-         " START WITH 1 "
-         " INCREMENT BY 1 "
-         " NO MINVALUE "
-         " NO MAXVALUE "
-         " CACHE 1 ");
-    exec("ALTER TABLE " + sequenceName + " OWNER TO " + aUserName);
-    exec("ALTER SEQUENCE " + sequenceName + " OWNED BY " + aTableName + ".id");
-    exec("ALTER TABLE ONLY " + aTableName +
-         " ALTER COLUMN id SET DEFAULT nextval(\' " + sequenceName +
-         "\'::regclass)");
+word_t
+data::PostgreSQL::getResultSize() const noexcept
+{
+    return m_pqxx_result.end() - m_pqxx_result.begin();
 }
 
 //--------------------------------------------------------------------------------

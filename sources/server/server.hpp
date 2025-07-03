@@ -1,23 +1,32 @@
-#ifndef SERVER_HPP
-#define SERVER_HPP
+#pragma once
 
-#include "crow/middlewares/cors.h"
+//--------------------------------------------------------------------------------
 
-#include "crow.h"
-#include "middleware.hpp"
+#include "core/module/module.hpp"
+
+#include "utility/common/holy_trinity.hpp"
+#include "utility/string/slicer.hpp"
+
+#include "token.hpp"
+
+//--------------------------------------------------------------------------------
 
 namespace serv
 {
-class Server
+class Server : public core::Module
 {
 public:
-    Server() noexcept;
-    static const serv::Middleware::context& getContext(
-        const crow::request& aReq) noexcept;
+    HOLY_TRINITY_SINGLETON(Server);
+    ~Server() override = default;
+
+    bool loopBody() noexcept override;
+    void commandSetup() const noexcept override;
+    void variableSetup() const noexcept override;
 
 private:
-    static crow::App<crow::CORSHandler, serv::Middleware> mApp;
+    Server() noexcept;
 };
+
 } // namespace serv
 
-#endif // !SERVER_HPP
+//--------------------------------------------------------------------------------

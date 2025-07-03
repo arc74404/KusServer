@@ -1,41 +1,65 @@
-#ifndef CONNECTION_POOL_HPP
-#define CONNECTION_POOL_HPP
-
-//--------------------------------------------------------------------------------
+#pragma once
 
 #include <mutex>
 #include <optional>
+#include <semaphore>
+#include <shared_mutex>
+#include <string>
+#include <unordered_set>
+#include <vector>
+
+#include "core/logging/table_storage.hpp"
 
 #include "database_connection.hpp"
 
-//--------------------------------------------------------------------------------
+#include "utility/type/lifecycle_manager.hpp"
+
+#include "credentials.hpp"
+#include "internal_connection.hpp"
+
+enum
+{
+    MAX_CONNECTIONS_COUNT = 5
+};
+
+using PoolSemaphore = std::counting_semaphore<MAX_CONNECTIONS_COUNT>;
 
 namespace data
 {
+
 class ConnectionPool
 {
 public:
-    // ConnectionPool() noexcept = default;
-    ConnectionPool(uint16_t aPoolSize, const ConnectionType& aType) noexcept;
+    HOLY_TRINITY_NOCOPY(ConnectionPool);
 
-    ConnectionPool(ConnectionPool&& other) noexcept            = default;
-    ConnectionPool& operator=(ConnectionPool&& other) noexcept = default;
+    static bool create(
+        util::LifecycleManager<ConnectionPool>& a_poll_addr,
+        const std::vector<std::string_view>& a_credentials_array) noexcept;
 
-    std::optional<DatabaseConnection> tryGetConnection() noexcept;
-    void returnConnectionToPool(
-        data::DatabaseConnection&& aConnection) noexcept;
+    InternalConnection& get() noexcept;
+    void put(InternalConnection& a_sql_conn) noexcept;
 
-    void destroy() noexcept;
-    void create(uint16_t aPoolSize, const ConnectionType& aType) noexcept;
+    void setConnectionCount(size_t a_count) noexcept;
 
 private:
-    uint16_t mPoolSize;
-    std::mutex mGetMutex;
-    std::mutex mPushMutex;
-    std::vector<DatabaseConnection> mConnections;
+    int m_cur_conn_count;
+    int m_max_conn_count;
+    Credentials m_credentials;
+    // TODO: table print vector size
+    std::vector<InternalConnection> m_connections;
+
+    std::shared_mutex m_resize_mutex;
+    std::vector<InternalConnection&> m_available_conn;
+    util::LifecycleManager<PoolSemaphore> m_available_semaphore;
+
+    static std::unordered_set<std::string> m_all_cred_combined;
+
+    TABLE_REGISTER_HPP(ConnectionPool,
+                       .addCol(obj.m_cur_conn_count, obj.m_max_conn_count)
+                           .addRow(obj.m_credentials));
+
+    ConnectionPool(
+        const std::vector<std::string_view>& a_credentials_array) noexcept;
 };
+
 } // namespace data
-
-//--------------------------------------------------------------------------------
-
-#endif // !CONNECTION_POOL_HPP

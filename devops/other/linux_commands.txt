@@ -1,3 +1,11 @@
+sudo apt-get install virtualbox-guest-x11
+sudo VBoxClient --clipboard
+sudo apt install -y openssh-server
+
+# no vim in git branch
+git config --global pager.branch 'false'
+git config --global core.editor "nano"
+
 ls -a
 ls -s
 la
@@ -13,6 +21,8 @@ chmod 400 ./id_rsa  #only read
 sudo systemctl status nginx
 sudo nginx -s reload
 sudo certbot install --cert-name kusmirror.ru
+
+/etc/nginx/nginx.conf user  rcomrad;
 
 # postgres
 sudo psql -U journal_user -h localhost -d journal_db 

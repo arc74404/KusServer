@@ -1,170 +1,108 @@
 #include "database_connection.hpp"
 
-#include <boost/date_time/gregorian/gregorian.hpp>
+#include <string>
+#include <unordered_map>
 
-#include <fstream>
-#include <set>
-#include <vector>
+#include "string/string_malloc.hpp"
 
-#include "domain/log.hpp"
+#include "database.hpp"
 
-#include "file_data/file.hpp"
-#include "file_data/path.hpp"
+#include "struct_storage.hpp"
 
-#include "sql_wrapper.hpp"
-
-//--------------------------------------------------------------------------------
-
-std::unordered_map<data::ConnectionType, data::DBSettings>
-data::DatabaseConnection::generateConnectionTypeSettings() noexcept
+enum
 {
-    std::unordered_map<ConnectionType, data::DBSettings> result;
+    NULL_POLL_ID = -1
+};
 
-    auto words = file::File::getWords("config", "database.pass");
-    for (auto& i : words)
-    {
-        result[data::ConnectionType(std::stoi(i[0]))] =
-            data::DBSettings{i[1], i[2], i[3], i[4]};
-    }
-
-    return result;
+data::DatabaseConnection::DatabaseConnection(InternalConnection& a_db_conn,
+                                             int a_pool_id) noexcept
+    : m_db_conn(a_db_conn), m_pool_id(a_pool_id)
+{
 }
 
-data::DBSettings
-data::DatabaseConnection::getConnectionTypeSettings(
-    const ConnectionType& aType) noexcept
+data::DatabaseConnection::~DatabaseConnection()
 {
-    static std::unordered_map<ConnectionType, data::DBSettings> result =
-        generateConnectionTypeSettings();
-    return result[aType];
+    release();
 }
 
-//--------------------------------------------------------------------------------
+// data::DatabaseConnection::DatabaseConnection(
+//     DatabaseConnection&& other) noexcept
+// {
+//     *this = std::move(other);
+// }
 
-data::DatabaseConnection::DatabaseConnection(const DBSettings& aDBS) noexcept
-    : mDBSettings(aDBS), mDatabase(aDBS)
-{
-    dom::writeInfo("Creating_database_quare");
-}
+// data::DatabaseConnection&
+// data::DatabaseConnection::operator=(DatabaseConnection&& other) noexcept
+// {
+//     release();
 
-data::DatabaseConnection::DatabaseConnection(
-    const ConnectionType& aType) noexcept
-    : mDBSettings(getConnectionTypeSettings(aType)),
-      mDatabase(getConnectionTypeSettings(aType))
-{
-    dom::writeInfo("Creating_database_quare");
-}
+//     m_pool_id = other.m_pool_id;
 
-//--------------------------------------------------------------------------------
+//     m_sql_conn       = other.m_sql_conn;
+//     other.m_sql_conn = nullptr;
+
+//     return *this;
+// }
 
 void
-data::DatabaseConnection::complexSelect(const std::string& aRequest) noexcept
+data::DatabaseConnection::release() noexcept
 {
-    mColumnNumber = 0;
-    mDatabase.directSelect(aRequest);
-}
-
-int
-data::DatabaseConnection::drop(const std::string& aTableName,
-                               const std::string& aCondition) noexcept
-{
-    int res = -1;
-    if (!aCondition.empty())
+    if (m_pool_id != NULL_POLL_ID)
     {
-        auto name = getTableName(aTableName);
-        mDatabase.drop(name, aCondition);
-        res = 1;
+        Database::putConnection(m_pool_id, m_db_conn);
+        m_pool_id = NULL_POLL_ID;
     }
-    return res;
 }
 
-int
-data::DatabaseConnection::dropByID(const std::string& aTableName,
-                                   const std::vector<int>& aIDs) noexcept
+size_t
+data::DatabaseConnection::getPollId() const noexcept
 {
-    int res = -1;
-    if (aIDs.size())
-    {
-        auto name = getTableName(aTableName);
-        for (auto i : aIDs)
-        {
-            mDatabase.drop(name, "id=" + data::wrap(i));
-        }
-        res = 1;
-    }
-    return res;
+    return m_pool_id;
 }
 
-//--------------------------------------------------------------------------------
+bool
+data::DatabaseConnection::hasValue() const noexcept
+{
+    return m_pool_id != NULL_POLL_ID;
+}
 
 void
-data::DatabaseConnection::createTable(
-    const std::string& aTableName,
-    const std::vector<ColumnSetting>& aColums) noexcept
+data::DatabaseConnection::populateDatabse() noexcept
 {
-    mDatabase.createTable(getTableName(aTableName), aColums, mDBSettings.user);
+    // MALLOC_STR(table_body, 200);
+    // auto body_ptr = table_body;
+    // for (size_t i = 0; i < StructStorage::getSize(); ++i)
+    // {
+    //     auto struct_data = StructStorage::getStructData(i);
+    //     for (word_t i = 0; i < struct_data.count; ++i)
+    //     {
+    //         auto& var_ref = struct_data.vars[i];
+    //         SPRINTF(body_ptr, "%s", struct_data.name);
+    //         switch (var_ref.type)
+    //         {
+    //             case CPPTypeEnum::INT:
+    //                 SPRINTF(body_ptr, " int,");
+    //                 break;
+    //             case CPPTypeEnum::DOUBLE:
+    //                 SPRINTF(body_ptr, " real,");
+    //                 break;
+    //             case CPPTypeEnum::BOOL:
+    //                 SPRINTF(body_ptr, " boolean,");
+    //                 break;
+    //             case CPPTypeEnum::CHAR_PTR:
+    //                 SPRINTF(body_ptr, "  character varying(%lu),",
+    //                         var_ref.size);
+    //                 break;
+    //         }
+    //     }
+    //     *(--body_ptr) = '\0';
+    //     m_sql_conn->createTable("rcomrad", struct_data.name, table_body);
+    // }
 }
 
 void
 data::DatabaseConnection::createEnvironment(
-    const ConnectionType& aType) noexcept
+    const data::Credentials& a_credentials) noexcept
 {
-    mDatabase.createEnvironment(getConnectionTypeSettings(aType));
-}
-
-void
-data::DatabaseConnection::dropDatabase(const ConnectionType& aType) noexcept
-{
-    mDatabase.deleteDatabase(getConnectionTypeSettings(aType).name);
-}
-
-//--------------------------------------------------------------------------------
-
-bool
-data::DatabaseConnection::securityCheck(const std::string& aStr) noexcept
-{
-    bool result = true;
-
-    int minusCnt = 0;
-    for (auto c : aStr)
-    {
-        switch (c)
-        {
-            case '-':
-                minusCnt++;
-                break;
-            case ';':
-            case '\\':
-            case '/':
-            case '\'':
-            case '\"':
-                result = false;
-            default:
-                minusCnt = 0;
-                break;
-        }
-
-        if (minusCnt > 1) result = false;
-    }
-
-    return result;
-}
-
-//--------------------------------------------------------------------------------
-
-std::string
-data::DatabaseConnection::getCell(const std::string& aTableName,
-                                  const std::string& aColumnName,
-                                  const std::string& aCondition) noexcept
-{
-    return mDatabase.getCell(getTableName(aTableName), aColumnName, aCondition);
-}
-
-//--------------------------------------------------------------------------------
-
-std::string
-data::DatabaseConnection::getTableName(
-    const std::string& aTableName) const noexcept
-{
-    return mDBSettings.shame + "." + aTableName;
+    // m_sql_conn->createEnvironment(a_credentials);
 }

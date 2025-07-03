@@ -1,6 +1,10 @@
 /bin
 /build
-/.vscode
+
+/data
+
+/.vscode/settings.json
+/.vscode/browse.vc.db
 
 **.pdb
 **.obj
@@ -14,5 +18,8 @@
 **.dmprar
 **.out
 vcpkg_path.cmake
+
+id_rsa
+id_rsa.pub
 
 git update-index --assume-unchanged ./.vscode/*
