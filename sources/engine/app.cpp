@@ -7,52 +7,31 @@
 #include <utility>
 
 #include "render_manager/render_manager.hpp"
-#include "render_manager/shaders/shaders/shader.hpp"
-#include "utility/file_system/path_storage.hpp"
 
 #define COMPILE_SHADERS
 
 namespace kusengine
 {
 
-void
-App::compileShaders()
-{
-    auto sources_path = util::PathStorage::getFolderPath("sources");
-
-    std::string vertex_shader_path = sources_path.value().data();
-    vertex_shader_path +=
-        "engine/render_manager/shaders/spirv/default_vertex_shader.vert";
-
-    std::string fragment_shader_path = sources_path.value().data();
-    fragment_shader_path +=
-        "engine/render_manager/shaders/spirv/default_fragment_shader.frag";
-
-    auto dst_path = std::format("{}{}", sources_path.value(),
-                                "engine/render_manager/shaders/compiled/");
-
-    render::shader::compile(vertex_shader_path, dst_path);
-    render::shader::compile(fragment_shader_path, dst_path);
-}
-
 bool
 App::initApp()
 {
-#ifdef COMPILE_SHADERS
-    compileShaders();
-#endif
-
     try
     {
         m_window.initWindow(WIDTH, HEIGHT, "MyWindow");
-        render::RenderManager::getInstance().init(m_window);
+
+        render::RenderManager::getInstance().setup(m_window);
+
+        // render::RenderManager::getInstance().camera().switchTo("camera_3d");
+
+        m_mouse.init(m_window.get());
     }
     catch (std::exception& exc)
     {
         std::cout << exc.what();
+        std::cout << "\nInit exc\n";
         return false;
     }
-
     m_scene.create();
 
     return true;
@@ -76,6 +55,76 @@ App::FPSLimit(const double& loop_time)
     }
 }
 
+void
+App::handleEvents(float el_time)
+{
+
+    glfwPollEvents();
+
+    bool camera_action_flag = false;
+    auto window             = m_window.get();
+
+    int dir{};
+
+    if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS)
+    {
+        dir = GLFW_KEY_A;
+    }
+    if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
+    {
+        dir = GLFW_KEY_D;
+    }
+    if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
+    {
+        dir = GLFW_KEY_W;
+    }
+    if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
+    {
+        dir = GLFW_KEY_S;
+    }
+    if (glfwGetKey(window, GLFW_KEY_UP) == GLFW_PRESS)
+    {
+        dir = GLFW_KEY_UP;
+    }
+    if (glfwGetKey(window, GLFW_KEY_DOWN) == GLFW_PRESS)
+    {
+        dir = GLFW_KEY_DOWN;
+    }
+    if (glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS)
+    {
+        dir = GLFW_KEY_SPACE;
+    }
+    if (glfwGetKey(window, GLFW_KEY_LEFT_CONTROL) == GLFW_PRESS)
+    {
+        dir = GLFW_KEY_LEFT_CONTROL;
+    }
+
+    auto& mouse_offset = m_mouse.update(m_window.get());
+
+    auto& camera =
+        render::RenderManager::getInstance().camera().getCurrentCamera();
+
+    auto type = camera->type();
+
+    if (type == render::BasicCamera::Type::DEFAULT_CAMERA_2D)
+    {
+        render::Camera2D* camera_2d =
+            static_cast<render::Camera2D*>(camera.get());
+
+        camera_2d->processKeyboard(dir, el_time);
+    }
+    else if (type == render::BasicCamera::Type::DEFAULT_CAMERA_3D)
+    {
+        render::Camera3D* camera_3d =
+            static_cast<render::Camera3D*>(camera.get());
+
+        camera_3d->processKeyboard(dir, el_time);
+
+        if (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS)
+            camera_3d->processMouseMovement(mouse_offset);
+    }
+}
+
 bool
 App::loopBody()
 {
@@ -91,7 +140,9 @@ App::loopBody()
 
     float el_time = getLoopTime();
 
-    render::RenderManager::getInstance().draw(&m_scene);
+    handleEvents(el_time);
+
+    render::RenderManager::getInstance().render(m_scene);
 
     return true;
 }

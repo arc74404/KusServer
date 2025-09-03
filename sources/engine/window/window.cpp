@@ -5,6 +5,7 @@
 
 namespace kusengine
 {
+
 Window::~Window()
 {
     glfwDestroyWindow(m_window);
@@ -114,6 +115,11 @@ Window::initWindow(int width, int height, const std::string& title)
     glfwSetWindowUserPointer(m_window, this);
 
     glfwSetFramebufferSizeCallback(m_window, framebufferResizeCallback);
+
+    // glfwSetCursorPosCallback(m_window, mouse_callback);
+    // glfwSetInputMode(m_window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+
+
     return true;
 }
 
@@ -122,57 +128,6 @@ Window::isOpen() const
 {
     return !glfwWindowShouldClose(m_window);
 }
-
-// void
-// Window::handleEvents(Scene& scene, float time)
-// {
-//     glfwPollEvents();
-
-//     bool camera_action_flag = false;
-
-//     float x = 0, y = 0, z = 0;
-
-//     if (glfwGetKey(m_window, GLFW_KEY_A) == GLFW_PRESS)
-//     {
-//         x = -2 * time;
-
-//         camera_action_flag = true;
-//     }
-//     if (glfwGetKey(m_window, GLFW_KEY_D) == GLFW_PRESS)
-//     {
-//         x = 2 * time;
-
-//         camera_action_flag = true;
-//     }
-//     if (glfwGetKey(m_window, GLFW_KEY_W) == GLFW_PRESS)
-//     {
-//         y = -2 * time;
-
-//         camera_action_flag = true;
-//     }
-//     if (glfwGetKey(m_window, GLFW_KEY_S) == GLFW_PRESS)
-//     {
-//         y = 2 * time;
-
-//         camera_action_flag = true;
-//     }
-//     if (glfwGetKey(m_window, GLFW_KEY_UP) == GLFW_PRESS)
-//     {
-//         z = time;
-
-//         camera_action_flag = true;
-//     }
-//     if (glfwGetKey(m_window, GLFW_KEY_DOWN) == GLFW_PRESS)
-//     {
-//         z = -time;
-
-//         camera_action_flag = true;
-//     }
-//     if (camera_action_flag)
-//     {
-//         scene.moveCamera(x, y, z);
-//     }
-// }
 
 void
 Window::framebufferResizeCallback(GLFWwindow* glfw_window_ptr,
@@ -187,6 +142,12 @@ Window::framebufferResizeCallback(GLFWwindow* glfw_window_ptr,
     window->m_width = width;
 
     window->m_height = height;
+}
+
+GLFWwindow*
+Window::get() const& noexcept
+{
+    return m_window;
 }
 
 }; // namespace kusengine

@@ -9,22 +9,6 @@
 namespace kusengine::render
 {
 
-// void
-// SwapChainFrame::fillDescriptorSets(std::vector<vk::DescriptorSet>& d_sets)
-// const
-// {
-//     for (int i = 0; i < m_descriptor_sets.size(); ++i)
-//     {
-//         d_sets.emplace_back(m_descriptor_sets[i].get());
-//     }
-// }
-
-const std::vector<vk::DescriptorSet>&
-SwapChainFrame::descriptorSets() const& noexcept
-{
-    return m_descriptor_sets;
-}
-
 const SynchronizationControl&
 SwapChainFrame::synControl() const& noexcept
 {
@@ -40,35 +24,59 @@ SwapChainFrame::commandBuffer() const& noexcept
 const vk::Framebuffer&
 SwapChainFrame::getBuffer(const std::string& key) const&
 {
-    return m_framebuffers.at(key).get();
+    auto it = m_framebuffers.find(key);
+    if (it == m_framebuffers.end())
+    {
+        throw std::exception("cant find frame buffer");
+    }
+    return it->second.get();
 }
 
-// const vk::Framebuffer&
-// SwapChainFrame::framebuffer() const noexcept
-// {
-//     return m_framebuffer.get();
-// }
+void
+SwapChainFrame::setupDepth(const vk::Extent2D& extent)
+{
+    ImageConfigInfo image_config_info = {
+        .format      = vk::Format::eD32Sfloat,
+        .width       = extent.width,
+        .height      = extent.height,
+        .usage_flags = vk::ImageUsageFlagBits::eDepthStencilAttachment |
+                       vk::ImageUsageFlagBits::eTransferDst |
+                       vk::ImageUsageFlagBits::eSampled};
+
+    m_depth_image.create(image_config_info);
+
+    ImageViewConfigInfo image_view_config_info = {
+        .aspect_mask = vk::ImageAspectFlagBits::eDepth};
+    m_depth_image.createImageView(image_view_config_info);
+}
 
 void
-SwapChainFrame::createImage(const vk::Image& image, const vk::Format& format)
+SwapChainFrame::setupImages(const vk::Image& image,
+                            const vk::Format& format,
+                            const vk::Extent2D& extent)
 {
-    vk::ImageViewCreateInfo create_image_view_info = {};
-    create_image_view_info.image                   = image;
-    create_image_view_info.viewType                = vk::ImageViewType::e2D;
-    create_image_view_info.format                  = format;
-    create_image_view_info.components.r = vk::ComponentSwizzle::eIdentity;
-    create_image_view_info.components.g = vk::ComponentSwizzle::eIdentity;
-    create_image_view_info.components.b = vk::ComponentSwizzle::eIdentity;
-    create_image_view_info.components.a = vk::ComponentSwizzle::eIdentity;
-    create_image_view_info.subresourceRange.aspectMask =
-        vk::ImageAspectFlagBits::eColor;
-    create_image_view_info.subresourceRange.baseMipLevel   = 0;
-    create_image_view_info.subresourceRange.levelCount     = 1;
-    create_image_view_info.subresourceRange.baseArrayLayer = 0;
-    create_image_view_info.subresourceRange.layerCount     = 1;
+    // view
+    {
+        vk::ImageViewCreateInfo create_image_view_info = {};
+        create_image_view_info.image                   = image;
+        create_image_view_info.viewType                = vk::ImageViewType::e2D;
+        create_image_view_info.format                  = format;
+        create_image_view_info.components.r = vk::ComponentSwizzle::eIdentity;
+        create_image_view_info.components.g = vk::ComponentSwizzle::eIdentity;
+        create_image_view_info.components.b = vk::ComponentSwizzle::eIdentity;
+        create_image_view_info.components.a = vk::ComponentSwizzle::eIdentity;
+        create_image_view_info.subresourceRange.aspectMask =
+            vk::ImageAspectFlagBits::eColor;
+        create_image_view_info.subresourceRange.baseMipLevel   = 0;
+        create_image_view_info.subresourceRange.levelCount     = 1;
+        create_image_view_info.subresourceRange.baseArrayLayer = 0;
+        create_image_view_info.subresourceRange.layerCount     = 1;
 
-    m_view =
-        LOGICAL_DEVICE_INSTANCE.createImageViewUnique(create_image_view_info);
+        m_view = LOGICAL_DEVICE_INSTANCE.createImageViewUnique(
+            create_image_view_info);
+    }
+
+    setupDepth(extent);
 }
 
 void
@@ -76,7 +84,8 @@ SwapChainFrame::addFrameBuffer(std::string_view key,
                                const vk::RenderPass& renderpass,
                                const vk::Extent2D& extent)
 {
-    std::vector<vk::ImageView> attachments = {m_view.get()};
+    std::vector<vk::ImageView> attachments = {m_view.get(),
+                                              m_depth_image.view()};
 
     vk::FramebufferCreateInfo framebufferInfo;
     framebufferInfo.flags           = vk::FramebufferCreateFlags();
@@ -92,61 +101,13 @@ SwapChainFrame::addFrameBuffer(std::string_view key,
 }
 
 void
-SwapChainFrame::writeDescriptorSetUBO()
-{
-    vk::DescriptorBufferInfo ubo_buffer_info{};
-    ubo_buffer_info.buffer = m_uniform_buffer.buffer();
-    ubo_buffer_info.offset = 0;
-    ubo_buffer_info.range  = m_uniform_buffer.byteSize();
-
-    vk::WriteDescriptorSet descriptor_write;
-    descriptor_write.dstSet          = m_descriptor_sets[0];
-    descriptor_write.dstBinding      = 0;
-    descriptor_write.dstArrayElement = 0;
-    descriptor_write.descriptorType  = vk::DescriptorType::eUniformBuffer;
-    descriptor_write.descriptorCount = 1;
-    descriptor_write.pBufferInfo     = &ubo_buffer_info;
-
-    LOGICAL_DEVICE_INSTANCE.updateDescriptorSets(1, &descriptor_write, 0,
-                                                 nullptr);
-}
-
-void
-SwapChainFrame::writeDescriptorSetMBDD()
-{
-    vk::DescriptorBufferInfo dob_buffer_info{};
-    dob_buffer_info.buffer = m_storage_buffer.buffer();
-    dob_buffer_info.offset = 0;
-    dob_buffer_info.range  = m_storage_buffer.byteSize();
-
-    vk::WriteDescriptorSet descriptor_write;
-    descriptor_write.dstSet          = m_descriptor_sets[0];
-    descriptor_write.dstBinding      = 1;
-    descriptor_write.dstArrayElement = 0;
-    descriptor_write.descriptorType  = vk::DescriptorType::eStorageBuffer;
-    descriptor_write.descriptorCount = 1;
-    descriptor_write.pBufferInfo     = &dob_buffer_info;
-
-    LOGICAL_DEVICE_INSTANCE.updateDescriptorSets(1, &descriptor_write, 0,
-                                                 nullptr);
-}
-
-void
-SwapChainFrame::createDescriptorSet(
-    const DescriptorAllocator& default_desc_alloc)
-{
-    m_descriptor_sets.resize(1);
-    default_desc_alloc.allocate(m_descriptor_sets[0]);
-}
-
-void
-SwapChainFrame::createCommandBuffer()
+SwapChainFrame::setupCommandBuffer()
 {
     m_command_buffer.create();
 }
 
 void
-SwapChainFrame::createSynchronization()
+SwapChainFrame::setupSynchronization()
 {
     m_sync_control.create();
 }
@@ -180,15 +141,6 @@ SwapChainFrame::submitCommandBuffer()
 
     DEVICE_INSTANCE.getQueue("graphics")
         .submit(submitInfo, m_sync_control.inFlightFence());
-}
-
-void
-SwapChainFrame::bind(const vk::CommandBuffer& cmd,
-                     const vk::PipelineLayout& layout) const
-{
-    cmd.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, layout, 0u,
-                           m_descriptor_sets.size(), m_descriptor_sets.data(),
-                           0, nullptr);
 }
 
 }; // namespace kusengine::render

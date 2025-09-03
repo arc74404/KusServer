@@ -8,6 +8,7 @@
 #include <string>
 #include <vector>
 
+#include "engine/gui/mouse.hpp"
 #include "engine/render_manager/instance/instance.hpp"
 
 namespace kusengine
@@ -44,6 +45,8 @@ public:
 
     void calculateFrameRate();
 
+    GLFWwindow* get() const& noexcept;
+
 private:
     static void framebufferResizeCallback(GLFWwindow* window,
                                           int width,
@@ -54,6 +57,8 @@ private:
                              int scancode,
                              int action,
                              int mods);
+
+    // static void mouse_callback(GLFWwindow* window, double xpos, double ypos);
 
     std::string m_title;
 

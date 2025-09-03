@@ -3,7 +3,10 @@
 #include <optional>
 #include <unordered_map>
 
-#include "texture.hpp"
+#include "glm/vec2.hpp"
+#include "nlohmann/json.hpp"
+
+#include "texture_zone.hpp"
 
 namespace kusengine::render
 {
@@ -11,11 +14,9 @@ namespace kusengine::render
 class TextureManager
 {
 public:
-    const Texture* const getTexture(
-        const std::string& key) const;
+    const Texture* const getTexture(const std::string& name) const;
 
-    void loadTextures(std::string filename,
-                      const DescriptorManager& desc_manager);
+    void loadTextures(const DescriptorManager& desc_manager);
 
 private:
     void addTexture(const std::string& file_path,
@@ -23,7 +24,6 @@ private:
 
     std::unordered_map<std::string, Texture> m_texture_storage;
 };
-
 
 }; // namespace kusengine::render
 

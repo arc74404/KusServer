@@ -1,11 +1,10 @@
 #include "texture_manager.hpp"
 
-#include <nlohmann/json.hpp>
-
 #include <fstream>
 #include <iostream>
 
-#include "utility/file_system/path_storage.hpp"
+#include "kernel/framework/include_me.hpp"
+#include "kernel/utility/file_system/path.hpp"
 
 using json = nlohmann::json;
 
@@ -13,12 +12,14 @@ namespace kusengine::render
 {
 
 void
-TextureManager::loadTextures(std::string filename,
-                             const DescriptorManager& desc_manager)
+TextureManager::loadTextures(const DescriptorManager& desc_manager)
 {
-    auto res_path = util::PathStorage::getFolderPath("resource").value();
 
-    filename = res_path.data() + filename;
+    // Atlases
+    auto res_path = KERNEL.getFolderPath("resource");
+
+    std::string filename = res_path;
+    filename += "engine_textures/texture_paths.json";
 
     std::ifstream file(filename);
     json data = json::parse(file);
@@ -37,8 +38,7 @@ void
 TextureManager::addTexture(const std::string& file_path,
                            const DescriptorManager& descriptor_manager)
 {
-
-    std::string texture_name = util::Path::getName(file_path, LOCAL_CONTEXT);
+    auto texture_name = util::Path::getName(file_path);
 
     if (m_texture_storage.contains(texture_name))
     {
@@ -50,8 +50,7 @@ TextureManager::addTexture(const std::string& file_path,
         Texture new_texture;
         new_texture.loadTexture(file_path);
 
-        new_texture.allocDescriptorSet("default_fragment_shader",
-                                       descriptor_manager);
+        new_texture.allocDescriptorSet(descriptor_manager);
 
         m_texture_storage[texture_name] = std::move(new_texture);
     }
@@ -63,14 +62,12 @@ TextureManager::addTexture(const std::string& file_path,
 }
 
 const Texture* const
-TextureManager::getTexture(const std::string& key) const
+TextureManager::getTexture(const std::string& name) const
 {
-    auto it = m_texture_storage.find(key);
+    auto it = m_texture_storage.find(name);
     if (it == m_texture_storage.end())
     {
-        std::cout << key << " cant find in texture storage\n";
-
-        return &(m_texture_storage.begin()->second);
+        throw "cant find in texture_zone_storage\n";
     }
 
     return &(it->second);

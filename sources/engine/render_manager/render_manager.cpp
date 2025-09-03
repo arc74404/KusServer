@@ -4,10 +4,12 @@
 
 #include "engine/render_manager/device/device.hpp"
 #include "engine/window/window.hpp"
-namespace kusengine
+
+#define COMPILE_SHADERS 1
+
+namespace kusengine::render
 {
-namespace render
-{
+
 RenderManager::RenderManager()
 {
 }
@@ -20,9 +22,15 @@ RenderManager::getInstance()
 }
 // --- init / shutdown --- //
 void
-RenderManager::init(const kusengine::Window& window)
+RenderManager::setup(const kusengine::Window& window)
 {
+    m_current_frame_number = 0;
+
     auto window_extent = window.getExtent();
+
+    m_camera_manager.setup(window_extent.width, window_extent.height);
+
+    m_shader_manager.setup(COMPILE_SHADERS);
 
     m_instance.create("KusEngine");
 
@@ -36,43 +44,65 @@ RenderManager::init(const kusengine::Window& window)
 
     m_descriptor_manager.setup();
 
-    m_render_system.setup(m_descriptor_manager, m_swap_chain.extent(),
-                          m_swap_chain.format());
+    m_render_system.setup(m_descriptor_manager, m_shader_manager,
+                          m_swap_chain.extent(), m_swap_chain.format());
 
-    max_frames_in_flight = m_swap_chain.createSwapChainFrames(
-        m_render_system, m_descriptor_manager);
+    m_max_frames_in_flight =
+        m_swap_chain.createSwapChainFrames(m_render_system);
 
-    frame_number = 0;
+    m_texture_manager.loadTextures(m_descriptor_manager);
 
-    m_texture_manager.loadTextures("engine_textures/texture_paths.json",
-                                   m_descriptor_manager);
+    m_material_manager.setup(m_texture_manager);
 
-    m_mesh_manager.loadMeshes();
-
-    // camera
-    m_ubo.projection = m_camera2d.recalculate();
+    m_mesh_manager.setup(m_material_manager);
 }
 
 void
 RenderManager::shutdown()
 {
 }
+
+const MeshManager&
+RenderManager::meshManager() const noexcept
+{
+    return m_mesh_manager;
+}
+
+const DescriptorManager&
+RenderManager::descriptorManager() const noexcept
+{
+    return m_descriptor_manager;
+}
+
+int
+RenderManager::frameCount() const noexcept
+{
+    return m_max_frames_in_flight;
+}
+
+int
+RenderManager::getCurrentFrameNumber() const noexcept
+{
+    return m_current_frame_number;
+}
+
 // ----------------------- //
 //
 // --------- draw -------- //
 
 void
-RenderManager::draw(BasicScene* const basic_scene)
+RenderManager::render(Scene& scene)
 {
-
-    auto& upd_frame = m_swap_chain.getFrame(frame_number);
+    auto& upd_frame = m_swap_chain.getFrame(m_current_frame_number);
 
     upd_frame.waitForFence();
 
     // upd data
-    m_ubo.projection = m_camera2d.recalculate();
-    upd_frame.updateUBO(m_ubo);
-    basic_scene->updMbddFrame(upd_frame);
+
+    m_ubo.camera_matrix = m_camera_manager.getCurrentCamera()->getMatrix();
+
+    scene.updateBuffers(m_ubo, m_current_frame_number);
+    //
 
     auto acquire_res = LOGICAL_DEVICE_INSTANCE.acquireNextImageKHR(
         m_swap_chain.swapchain(), UINT64_MAX,
@@ -81,18 +111,11 @@ RenderManager::draw(BasicScene* const basic_scene)
     uint32_t image_index = acquire_res.value;
 
     // record part
-    auto& upd_cmd            = upd_frame.commandBuffer();
-    auto binding_draw_lambda = [&scene    = basic_scene,
-                                &rend_sys = m_render_system, &frame = upd_frame,
-                                &cmd = upd_cmd]()
-    {
-        auto& layout = rend_sys.bindPipeline("default", cmd);
-        scene->bind(cmd);
-        frame.bind(cmd, layout);
-        scene->draw(cmd, layout);
-    };
 
-    m_render_system.execute(upd_frame, "default", upd_cmd, binding_draw_lambda);
+    auto& upd_cmd = upd_frame.commandBuffer();
+
+    scene.draw(upd_cmd, m_render_system, m_current_frame_number,
+               upd_frame); // begin renderpass and end
 
     // submit part
 
@@ -115,33 +138,44 @@ RenderManager::draw(BasicScene* const basic_scene)
         std::cout << "not success present\n";
     }
 
-    frame_number = (frame_number + 1) % max_frames_in_flight;
+    m_current_frame_number =
+        (m_current_frame_number + 1) % m_max_frames_in_flight;
 }
 
 // ----------------------- //
 //
 // ------ resources ------ //
-const Texture* const
-RenderManager::getResourceImpl(ChooseResType<Texture>&& rs,
-                               const std::string& key) const
-{
-    return m_texture_manager.getTexture(key);
-} // texture
+// const Texture* const
+// RenderManager::getResourceImpl(ChooseResType<Texture>&& rs,
+//                                const std::string& key) const
+// {
+//     return m_texture_manager.getTexture(key);
+// } // texture
 
-const Mesh<Vertex2DP1UV1>* const
-RenderManager::getResourceImpl(ChooseResType<Mesh<Vertex2DP1UV1>>&& rs,
-                               const std::string& key) const
-{
-    return m_mesh_manager.getMesh<Vertex2DP1UV1>(key);
-} // mesh<vertex 2d>
+// const Mesh<Vertex2DP1UV1>* const
+// RenderManager::getResourceImpl(ChooseResType<Mesh<Vertex2DP1UV1>>&& rs,
+//                                const std::string& key) const
+// {
+//     return m_mesh_manager.getMesh<Vertex2DP1UV1>(key);
+// } // mesh<vertex 2d>
 
-const Mesh<Vertex3DP1UV1>* const
-RenderManager::getResourceImpl(ChooseResType<Mesh<Vertex3DP1UV1>>&& rs,
-                               const std::string& key) const
-{
-    return m_mesh_manager.getMesh<Vertex3DP1UV1>(key);
-} // mesh<vertex 3d>
+// const Mesh<Vertex3DP1UV1>* const
+// RenderManager::getResourceImpl(ChooseResType<Mesh<Vertex3DP1UV1>>&& rs,
+//                                const std::string& key) const
+// {
+//     return m_mesh_manager.getMesh<Vertex3DP1UV1>(key);
+// } // mesh<vertex 3d>
 
 // ----------------------- //
-}; // namespace render
-}; // namespace kusengine
+//
+// ------- camera ---------//
+
+CameraManager&
+RenderManager::camera()
+{
+    return m_camera_manager;
+}
+
+// ----------------------- //
+
+}; // namespace kusengine::render

@@ -1,125 +1,88 @@
 #include "mesh_manager.hpp"
 
-#include <exception>
-#include <iostream>
-
 namespace kusengine::render
 {
 
-void
-MeshManager::loadMeshes()
+template <typename Vert_t>
+std::vector<char>
+translateToCharVector(const std::vector<Vert_t>& verts)
 {
+    std::vector<char> res;
+    res.reserve(verts.size() * Vert_t{}.byteSize());
 
-    // rectangle
-    std::vector<uint32_t> inds_rect = {0, 1, 2, 0, 2, 3};
+    for (int i = 0; i < verts.size(); ++i)
+    {
+        verts[i].pushTo(res);
+    }
 
-    std::vector<Vertex2DP1UV1> verts_rect = {{{{0.f, 0.f}, {0.f, 0.f}}},
-                                             {{{1.f, 0.f}, {1.f, 0.f}}},
-                                             {{{1.f, 1.f}, {1.f, 1.f}}},
-                                             {{{0.f, 1.f}, {0.f, 1.f}}}};
+    return res;
+}
 
-    addMesh<Vertex2DP1UV1>(inds_rect, verts_rect, "rectangle");
-
-    // cube
-
-    std::vector<uint32_t> inds_cube = {//
-                                       0, 1, 2, 0, 2, 3,
-                                       //
-                                       4, 5, 6, 4, 6, 7,
-                                       //
-                                       8, 9, 10, 8, 10, 11,
-                                       //
-                                       12, 13, 14, 12, 14, 15,
-                                       //
-                                       16, 17, 18, 16, 18, 19,
-                                       //
-                                       20, 21, 22, 20, 22, 23};
-
-    std::vector<Vertex3DP1UV1> verts_cube = {
-        //
-        {{{-0.5f, -0.5f, 0.5f}, {0.0f, 0.0f}}}, // 0
-        {{{0.5f, -0.5f, 0.5f}, {1.0f, 0.0f}}},  // 1
-        {{{0.5f, 0.5f, 0.5f}, {1.0f, 1.0f}}},   // 2
-        {{{-0.5f, 0.5f, 0.5f}, {0.0f, 1.0f}}},  // 3
-
-        //
-        {{{0.5f, -0.5f, -0.5f}, {0.0f, 0.0f}}},  // 4
-        {{{-0.5f, -0.5f, -0.5f}, {1.0f, 0.0f}}}, // 5
-        {{{-0.5f, 0.5f, -0.5f}, {1.0f, 1.0f}}},  // 6
-        {{{0.5f, 0.5f, -0.5f}, {0.0f, 1.0f}}},   // 7
-
-        //
-        {{{-0.5f, 0.5f, 0.5f}, {0.0f, 0.0f}}},  // 8
-        {{{0.5f, 0.5f, 0.5f}, {1.0f, 0.0f}}},   // 9
-        {{{0.5f, 0.5f, -0.5f}, {1.0f, 1.0f}}},  // 10
-        {{{-0.5f, 0.5f, -0.5f}, {0.0f, 1.0f}}}, // 11
-
-        //
-        {{{-0.5f, -0.5f, -0.5f}, {0.0f, 0.0f}}}, // 12
-        {{{0.5f, -0.5f, -0.5f}, {1.0f, 0.0f}}},  // 13
-        {{{0.5f, -0.5f, 0.5f}, {1.0f, 1.0f}}},   // 14
-        {{{-0.5f, -0.5f, 0.5f}, {0.0f, 1.0f}}},  // 15
-
-        //
-        {{{0.5f, -0.5f, -0.5f}, {0.0f, 0.0f}}}, // 16
-        {{{0.5f, -0.5f, 0.5f}, {1.0f, 0.0f}}},  // 17
-        {{{0.5f, 0.5f, 0.5f}, {1.0f, 1.0f}}},   // 18
-        {{{0.5f, 0.5f, -0.5f}, {0.0f, 1.0f}}},  // 19
-
-        //
-        {{{-0.5f, -0.5f, 0.5f}, {0.0f, 0.0f}}},  // 20
-        {{{-0.5f, -0.5f, -0.5f}, {1.0f, 0.0f}}}, // 21
-        {{{-0.5f, 0.5f, -0.5f}, {1.0f, 1.0f}}},  // 22
-        {{{-0.5f, 0.5f, 0.5f}, {0.0f, 1.0f}}}    // 23
+// TODO: builder
+void
+MeshManager::setup(const MaterialManager& material_manager)
+{
+    std::vector<VertexP2DUV> verts = {
+        {{0.f, 0.f}, {0.f, 0.f}},
+        {{1.f, 0.f}, {1.f, 0.f}},
+        {{1.f, 1.f}, {1.f, 1.f}},
+        {{0.f, 1.f}, {0.f, 1.f}}
     };
 
-    addMesh<Vertex3DP1UV1>(inds_cube, verts_cube, "cube");
-}
+    std::vector<uint32_t> inds = {0, 1, 2, 2, 3, 0};
 
-const Mesh<Vertex2DP1UV1>* const
-MeshManager::getMeshImpl(std::string_view key,
-                         ChooseVertexType<Vertex2DP1UV1>) const
-{
-    auto it = m_2d_p1_uv1_mesh_storage.find(key.data());
-
-    if (it == m_2d_p1_uv1_mesh_storage.end())
     {
-        throw std::exception(
-            (std::string(key.data()) + " does not exist in mesh manager\n")
-                .data());
+        // mesh rect
+        Mesh<VertexP2DUV> rect_mesh;
+
+        rect_mesh.setVertices(translateToCharVector(verts));
+        rect_mesh.setInds(inds);
+
+        ////////////
+
+        {
+            auto mesh = rect_mesh;
+
+            auto water = material_manager.getMaterial(
+                Material::Type::TEXTURE_ZONE, "stat_water");
+            mesh.setMaterial(water);
+
+            m_meshes.emplace(
+                std::make_pair(std::string("water_rectangle"),
+                               std::make_unique<Mesh<VertexP2DUV>>(mesh)));
+        }
+
+        //
+        {
+            auto mesh = rect_mesh;
+
+            auto stone = material_manager.getMaterial(
+                Material::Type::TEXTURE_ZONE, "stat_stone");
+            mesh.setMaterial(stone);
+
+            m_meshes.emplace(
+                std::make_pair(std::string("stone_rectangle"),
+                               std::make_unique<Mesh<VertexP2DUV>>(mesh)));
+        }
+        //
+        {
+            auto mesh = rect_mesh;
+
+            auto wood = material_manager.getMaterial(
+                Material::Type::TEXTURE_ZONE, "stat_wood");
+            mesh.setMaterial(wood);
+
+            m_meshes.emplace(
+                std::make_pair(std::string("wood_rectangle"),
+                               std::make_unique<Mesh<VertexP2DUV>>(mesh)));
+        }
     }
-    return &((*it).second);
 }
 
-void
-MeshManager::addMeshImpl(const std::vector<uint32_t>& indices,
-                         const std::vector<Vertex2DP1UV1>& vertices,
-                         const std::string& key)
+const IMesh* const
+MeshManager::getMesh(const std::string& name) const
 {
-    m_2d_p1_uv1_mesh_storage[key] = Mesh<Vertex2DP1UV1>(indices, vertices);
+    return m_meshes.find(name)->second.get();
 }
 
-// ----------- 3d Vertex Mesh ----------- //
-void
-MeshManager::addMeshImpl(const std::vector<uint32_t>& indices,
-                         const std::vector<Vertex3DP1UV1>& vertices,
-                         const std::string& key)
-{
-    m_3d_p1_uv1_mesh_storage[key] = Mesh<Vertex3DP1UV1>(indices, vertices);
-}
-
-const Mesh<Vertex3DP1UV1>* const
-MeshManager::getMeshImpl(std::string_view key,
-                         ChooseVertexType<Vertex3DP1UV1>) const
-{
-    auto it = m_3d_p1_uv1_mesh_storage.find(key.data());
-
-    if (it == m_3d_p1_uv1_mesh_storage.end())
-    {
-        throw std::exception(
-            (std::string(key.data()) + " does not exist in mesh manager\n")
-                .data());
-    }
-    return &((*it).second);
-}
-}; // namespace kusengine::render
+} // namespace kusengine::render

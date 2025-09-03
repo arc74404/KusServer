@@ -4,18 +4,15 @@
 //
 #include "descriptors/descriptor_manager.hpp"
 #include "instance/instance.hpp"
-#include "renderer/renderer.hpp"
 #include "swap_chain/swap_chain.hpp"
 //
-#include "camera/camera.hpp"
+#include "camera/camera_manager.hpp"
 #include "commands/command_buffer.hpp"
-#include "drawable/drawable_system_storage.hpp"
-#include "drawable/drawable_usings.hpp"
 #include "dynamics_data/uniform_buffer_object.hpp"
+#include "engine/scene/scene.hpp"
 #include "mesh/mesh_manager.hpp"
 #include "renderer/render_system.hpp"
-#include "scene/basic_scene.hpp"
-#include "textures/texture_manager.hpp"
+#include "shaders/shader_manager.hpp"
 
 namespace kusengine
 {
@@ -32,7 +29,7 @@ public:
 
 public:
     // --- init / shutdown --- //
-    void init(const kusengine::Window& window);
+    void setup(const kusengine::Window& window);
 
     void shutdown();
 
@@ -43,11 +40,11 @@ private:
 public:
     // void registerScene(BasicScene* const basic_scene);
 
-    void draw(BasicScene* const basic_scene);
+    void render(Scene& scene);
 
 private:
-    int max_frames_in_flight;
-    int frame_number;
+    int m_max_frames_in_flight;
+    int m_current_frame_number;
 
     Instance m_instance;
 
@@ -56,6 +53,8 @@ private:
     RenderSystem m_render_system;
 
     DescriptorManager m_descriptor_manager;
+
+    ShaderManager m_shader_manager;
 
     // ----------------------- //
     //
@@ -69,44 +68,31 @@ private:
     //
     // ------- camera -------- //
 public:
+    CameraManager& camera();
+
 private:
-    Camera2D m_camera2d;
+    CameraManager m_camera_manager;
 
     UBO m_ubo;
+
     // ----------------------- //
     //
-    // ------ resources ------ //
+    // ------ getters ------ //
 public:
-    template <typename ResT>
-    struct ChooseResType
-    {
-    };
+    const MeshManager& meshManager() const noexcept;
 
-    template <typename ResT>
-    const ResT* const getResource(ChooseResType<ResT>&& res_type,
-                                  const std::string& key) const
-    {
-        return getResourceImpl(std::move(res_type), key);
-    }
+    const DescriptorManager& descriptorManager() const noexcept;
 
-    // const Mesh* getMesh() const;
+    int frameCount() const noexcept;
+
+    int getCurrentFrameNumber() const noexcept;
 
 private:
-    TextureManager m_texture_manager;
     MeshManager m_mesh_manager;
 
-    const Texture* const getResourceImpl(
-        ChooseResType<Texture>&& rs,
-        const std::string& key) const; // texture
+    MaterialManager m_material_manager;
 
-    // Meshes
-    const Mesh<Vertex2DP1UV1>* const getResourceImpl(
-        ChooseResType<Mesh<Vertex2DP1UV1>>&& rs,
-        const std::string& key) const; // mesh<vertex 2d>
-
-    const Mesh<Vertex3DP1UV1>* const getResourceImpl(
-        ChooseResType<Mesh<Vertex3DP1UV1>>&& rs,
-        const std::string& key) const; // mesh<vertex 3d>
+    TextureManager m_texture_manager;
 
     // ----------------------- //
 private:

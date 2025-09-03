@@ -1,111 +1,76 @@
 #ifndef DRAWABLE_SYSTEM_HPP
 #define DRAWABLE_SYSTEM_HPP
 
-#include "engine/render_manager/model/model_storage.hpp"
-#include "engine/render_manager/swap_chain/swap_chain_frame.hpp"
+#include "engine/render_manager/cache/cache.hpp"
+#include "engine/render_manager/descriptors/resources/ubo_storage_resource_storage.hpp"
+#include "engine/render_manager/dynamics_data/uniform_buffer_object.hpp"
+#include "engine/render_manager/mesh/draw_info.hpp"
+#include "engine/render_manager/mesh/mesh_combiner.hpp"
+#include "engine/render_manager/model/complex_model.hpp"
+#include "engine/render_manager/model/model.hpp"
+#include "engine/render_manager/renderer/render_system.hpp"
 
-#include "basic_drawable.hpp"
+#include "idrawable.hpp"
 
-namespace kusengine
+namespace kusengine::render
 {
-namespace render
-{
 
-template <typename DrawableT, typename MBBDType>
 class DrawableSystem
 {
 public:
-    using DrawableType = DrawableT;
+    virtual ~DrawableSystem() = default;
 
-    template <typename Iterator>
-    void resetDrawables(Iterator begin, Iterator end);
+    DrawableSystem(ModelUpdData::Type mudt, int mud_size_butes);
 
-    // void update(SwapChainFrame& frame) const;
+    void setup(int frame_count, PipelineLayoutType plt);
 
-    void bind(const vk::CommandBuffer& command_buffer) const;
+    void draw(const vk::CommandBuffer& cmd,
+              const render::RenderSystem& render_system,
+              int frame_number,
+              const vk::Framebuffer& frame_buffer) const;
 
-    void draw(const vk::CommandBuffer& command_buffer,
-              const vk::PipelineLayout& layout) const;
+    void setDrawablesAndLink(
+        std::vector<std::unique_ptr<IDrawable>>& drawables);
 
-    const std::vector<MBBDType>& getMBDD() const& noexcept;
+    void addModel(const std::unique_ptr<Model>& model);
+
+    // resources
+
+    void setUBO(const UBO& ubo);
+
+    void updateResourcesBuffers(int frame_number);
 
 private:
-    bool is_empty = true;
+    void setFrameCount(int count);
 
-    ModelStorage<typename DrawableT::VertexType> m_model_storage;
+    void fillBufferAndLink(std::vector<std::unique_ptr<IDrawable>>& drawables);
 
-    std::vector<MBBDType> mbdd_data_vector;
+    // cache
+
+    mutable Cache<const Material*> m_material_cache;
+
+    //
+
+    ComplexModel m_complex_model;
+
+    GpuVertexBuffer m_vertex_buffer;
+
+    IndexBuffer m_index_buffer;
+
+    std::vector<DrawInfo> m_draw_info_vec;
+
+    // Instancing
+
+    PipelineLayoutType m_pipeline_layout_type;
+
+    int m_data_size_bytes;
+
+    std::vector<char> m_models_upd_data;
+
+    UBO m_ubo;
+
+    std::vector<UboStorageResorceStorage> m_resource_storage_vec; // per frame
 };
-
-template <typename DrawableT, typename MBBDType>
-template <typename Iterator>
-void
-DrawableSystem<DrawableT, MBBDType>::resetDrawables(Iterator begin,
-                                                    Iterator end)
-{
-    uint32_t count = end - begin;
-    mbdd_data_vector.resize(count);
-
-    if (count != 0) is_empty = false;
-
-    std::vector<std::pair<uint32_t, uint32_t>> inds(count);
-    auto it = begin;
-    for (uint32_t i = 0; i < count; i++)
-    {
-        auto& drawable = *((it++)->get());
-        auto index     = drawable.pushModel(m_model_storage);
-
-        inds[i].first  = i;
-        inds[i].second = index;
-    }
-    std::sort(inds.begin(), inds.end(), [](const auto& left, const auto& right)
-              { return left.second < right.second; });
-
-    for (uint32_t i = 0; i < count; i++)
-    {
-        auto cor_index = inds[i].first;
-
-        (begin + cor_index)->get()->linkData(&(mbdd_data_vector[i]));
-        (begin + cor_index)->get()->updModelMatrix();
-    }
-
-    m_model_storage.fillBuffers();
-}
-// template <typename DrawableT, typename MBBDType>
-// void
-// DrawableSystem<DrawableT, MBBDType>::update(SwapChainFrame& frame) const
-// {
-//     frame.updateMBDD(mbdd_data_vector);
-//     frame.updateUBO(m_ubo);
-// }
-
-template <typename DrawableT, typename MBBDType>
-void
-DrawableSystem<DrawableT, MBBDType>::bind(
-    const vk::CommandBuffer& command_buffer) const
-{
-    if (is_empty) return;
-    m_model_storage.bind(command_buffer);
-}
-
-template <typename DrawableT, typename MBBDType>
-void
-DrawableSystem<DrawableT, MBBDType>::draw(
-    const vk::CommandBuffer& command_buffer,
-    const vk::PipelineLayout& layout) const
-{
-    if (is_empty) return;
-    m_model_storage.draw(command_buffer, layout);
-}
-
-template <typename DrawableT, typename MBBDType>
-const std::vector<MBBDType>&
-DrawableSystem<DrawableT, MBBDType>::getMBDD() const& noexcept
-{
-    return mbdd_data_vector;
-}
-
-}; // namespace render
-}; // namespace kusengine
+} // namespace kusengine::render
 
 #endif // DRAWABLE_SYSTEM_HPP
